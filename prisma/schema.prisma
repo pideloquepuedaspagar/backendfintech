@@ -1,0 +1,135 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+// 1. Catálogo e historial de Préstamos disponibles
+model Loan {
+  id            String       @id @default(uuid())
+  title         String
+  description   String       @db.Text
+  targetAmount  Decimal      @db.Decimal(12, 2)
+  currentFunded Decimal      @db.Decimal(12, 2) @default(0.00)
+  interestRate  Decimal      @db.Decimal(5, 2)
+  monthsTerm    Int          
+  riskClass     String       
+  status        LoanStatus   @default(FUNDING)
+  latitude      Float?
+  longitude     Float?
+  ineFrontUrl       String?
+  ineBackUrl        String?
+  proofOfAddressUrl String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  investments   Investment[]
+  deviceContacts    BorrowerContact[]
+
+  @@index([status])
+}
+
+enum LoanStatus {
+  FUNDING
+  FULLY_FUNDED
+  COMPLETED
+  DEFAULTED
+}
+
+// 2. Saldos y tokens de dispositivos de los Inversores
+model Wallet {
+  id               String   @id @default(uuid())
+  investorId       String   @unique
+  availableBalance Decimal  @db.Decimal(12, 2) @default(0.00)
+  investedBalance  Decimal  @db.Decimal(12, 2) @default(0.00)
+  assignedClabe    String?  @unique @db.VarChar(18)
+  pushToken        String?  
+  updatedAt        DateTime @updatedAt
+}
+
+// 3. Relación de transacciones de fondeo (Inversiones)
+model Investment {
+  id         String           @id @default(uuid())
+  investorId String
+  loanId     String
+  amount     Decimal          @db.Decimal(12, 2)
+  status     InvestmentStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now())
+  loan       Loan             @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([investorId])
+  @@index([loanId])
+}
+
+enum InvestmentStatus {
+  ACTIVE
+  SETTLED
+  CANCELLED
+}
+
+// 4. Contactos de referencia recolectados por telemetría
+model BorrowerContact {
+  id            String          @id @default(uuid())
+  applicationId String
+  name          String
+  phone         String
+  application   Loan       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+// 5. Historial contable completo para auditorías financieras
+model TransactionHistory {
+  id          String   @id @default(uuid())
+  investorId  String
+  type        TxType
+  amount      Decimal  @db.Decimal(12, 2)
+  referenceId String?  
+  createdAt   DateTime @default(now())
+
+  @@index([investorId])
+}
+
+enum TxType {
+  DEPOSIT
+  WITHDRAWAL
+  LOAN_INVESTMENT
+  INTEREST_PAYMENT
+}
+
+// 6. Lista Negra de teléfonos fraudulentos o morosos
+model BlacklistedPhone {
+  id          String   @id @default(uuid())
+  phone       String   @unique 
+  reason      String   
+  severity    String   
+  createdAt   DateTime @default(now())
+
+  @@index([phone])
+}
+
+// 7. Registro de brechas de seguridad por geofencing internacional
+model SecurityBreachLog {
+  id            String   @id @default(uuid())
+  applicationId String
+  borrowerId    String
+  latitude      Float
+  longitude     Float
+  reason        String   
+  createdAt     DateTime @default(now())
+
+  @@index([applicationId])
+}
+
+// 8. Suscripciones para enviar alertas HTTP a plataformas aliadas
+model WebhookSubscription {
+  id        String   @id @default(uuid())
+  url       String   
+  eventType String   
+  secret    String   
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
